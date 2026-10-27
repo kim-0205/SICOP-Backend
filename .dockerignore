@@ -1,0 +1,12 @@
+.vs/
+.vscode/
+.git/
+.github/
+**/bin/
+**/obj/
+*.user
+*.suo
+.env
+.env.*
+appsettings.Development.json
+appsettings.json
