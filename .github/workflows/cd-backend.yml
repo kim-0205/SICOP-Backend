@@ -1,0 +1,46 @@
+
+# Publicación Docker de SICOP Backend
+name: CD - SICOP Backend
+
+# Publicar únicamente cuando se actualice main
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    name: Publicar imagen en GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      # Descargar nuestro proyecto
+      - name: Obtener código
+        uses: actions/checkout@v6
+
+      # Preparar Docker Buildx
+      - name: Configurar Docker
+        uses: docker/setup-buildx-action@v4
+
+      # Autenticarnos en GHCR
+      - name: Iniciar sesión en GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Construir y publicar la imagen
+      - name: Construir y publicar Docker
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/kim-0205/sicop-backend:latest
+            ghcr.io/kim-0205/sicop-backend:${{ github.sha }}

@@ -1,0 +1,17 @@
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Compilaciones .NET
+**/bin/
+**/obj/
+
+# Configuraciones privadas
+.env
+.env.*
+**/appsettings.Development.json
+
+# Archivos temporales
+*.log
