@@ -1,0 +1,46 @@
+
+# Integración continua de SICOP Backend
+name: CI - SICOP Backend
+
+# Ejecutar CI en nuestras ramas principales
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+  pull_request:
+    branches:
+      - develop
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compilar Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      # Obtener el código fuente
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      # Instalar .NET 10
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Restaurar dependencias
+      - name: Restaurar paquetes
+        run: dotnet restore SICOP.slnx
+
+      # Compilar en modo Release
+      - name: Compilar solución
+        run: dotnet build SICOP.slnx --configuration Release --no-restore
+
+      # Ejecutar pruebas, si existen
+      - name: Ejecutar pruebas
+        run: dotnet test SICOP.slnx --configuration Release --no-build --no-restore
