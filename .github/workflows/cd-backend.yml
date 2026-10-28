@@ -61,6 +61,10 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+          
+      # Restaurar paquetes NuGet
+      - name: Restaurar paquetes NuGet
+        run: dotnet restore SICOP.csproj    
 
       # Instalar Entity Framework Core
       - name: Instalar EF Core
