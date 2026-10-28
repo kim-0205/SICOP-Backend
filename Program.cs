@@ -7,6 +7,27 @@ var builder = WebApplication.CreateBuilder(args);
 // Registra los controladores de nuestra Web API.
 builder.Services.AddControllers();
 
+// Permitir la comunicación entre Vue y nuestra API .NET.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SICOPFrontend", policy =>
+    {
+        policy.WithOrigins(
+            // Frontend local.
+            "http://localhost:5173",
+
+            // Frontend local en modo Preview.
+            "http://localhost:4173",
+
+            // Frontend desplegado en OpenShift.
+            "https://sicop-frontend-sicop-dev-dev.apps.rm1.0a51.p1.openshiftapps.com"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod();
+    });
+});
+
+
 // Registra el servicio de facturas para utilizarlo
 // mediante inyección de dependencias.
 builder.Services.AddScoped<FacturaService>();
@@ -32,6 +53,9 @@ if (app.Environment.IsDevelopment())
 
 // Redirige las solicitudes HTTP hacia HTTPS.
 app.UseHttpsRedirection();
+
+// Habilitar CORS para nuestro Frontend Vue.
+app.UseCors("SICOPFrontend");
 
 // Habilita la autorización.
 app.UseAuthorization();
