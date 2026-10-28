@@ -44,3 +44,30 @@ jobs:
           tags: |
             ghcr.io/kim-0205/sicop-backend:latest
             ghcr.io/kim-0205/sicop-backend:${{ github.sha }}
+
+  # NUEVO: Actualizar SQL Server después de publicar Docker
+  migraciones:
+    name: Aplicar migraciones a MonsterASP.NET
+    runs-on: ubuntu-latest
+    needs: docker
+
+    steps:
+      # Descargar nuestro proyecto
+      - name: Obtener código
+        uses: actions/checkout@v6
+
+      # Preparar .NET 10
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Instalar Entity Framework Core
+      - name: Instalar EF Core
+        run: dotnet tool install --global dotnet-ef --version '10.*'
+
+      # Aplicar migraciones pendientes a SQL Server remoto
+      - name: Ejecutar migraciones
+        env:
+          SICOP_SQL_CONNECTION: ${{ secrets.SICOP_SQL_CONNECTION }}
+        run: dotnet ef database update --connection "$SICOP_SQL_CONNECTION"
