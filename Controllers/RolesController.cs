@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
@@ -6,6 +7,9 @@ using SICOP.DTOs;
 
 [Route("api/[controller]")]
 [ApiController]
+
+// Exige un token JWT válido para acceder al controlador.
+[Authorize]
 public class RolesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -59,6 +63,7 @@ public class RolesController : ControllerBase
         return Ok(respuesta);
     }
     // PUT: api/Roles/1
+    [Authorize(Roles = "Administrador General")]
     // Actualiza los datos de un rol utilizando un DTO.
     [HttpPut("{rolid:int}")]
     public async Task<IActionResult> PutRol(
@@ -103,10 +108,9 @@ public class RolesController : ControllerBase
         return NoContent();
     }
 
-
-
-
     // POST: api/Roles
+    // Solo el Administrador General puede registrar roles.
+    [Authorize(Roles = "Administrador General")]
     // Registra un nuevo rol utilizando un DTO de entrada.
     [HttpPost]
     public async Task<ActionResult<RolRespuestaDto>> PostRol(
@@ -160,6 +164,7 @@ public class RolesController : ControllerBase
     }
 
     // DELETE: api/Roles/1
+    [Authorize(Roles = "Administrador General")]
     // Impide eliminar roles para proteger las relaciones con usuarios.
     [HttpDelete("{rolid:int}")]
     public IActionResult DeleteRol(int rolid)

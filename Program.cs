@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +91,73 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
             // No permite minutos adicionales después del vencimiento.
             ClockSkew = TimeSpan.Zero
+        };
+
+        // Comprueba el estado y rol actual del usuario en SQL Server.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                // Obtiene el identificador del usuario desde el JWT.
+                var usuarioIdTexto = context.Principal?
+                    .FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                // Rechaza tokens sin un identificador válido.
+                if (!int.TryParse(usuarioIdTexto, out int usuarioId))
+                {
+                    context.Fail("El token no contiene un usuario válido.");
+                    return;
+                }
+
+                // Obtiene ApplicationDbContext mediante inyección de dependencias.
+                var db = context.HttpContext.RequestServices
+                    .GetRequiredService<ApplicationDbContext>();
+
+                // Consulta el estado y el rol actual del usuario.
+                var usuario = await db.Usuarios
+                    .AsNoTracking()
+                    .Include(u => u.Rol)
+                    .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+
+                // Rechaza el token si el usuario ya no existe o está inactivo.
+                if (usuario == null || !usuario.Activo)
+                {
+                    context.Fail("El usuario no existe o está desactivado.");
+                    return;
+                }
+
+                // Obtiene la versión de seguridad incluida en el JWT.
+                var versionTokenTexto = context.Principal?
+                    .FindFirst("VersionToken")?.Value;
+
+                // Verifica que el token tenga una versión válida.
+                if (!int.TryParse(versionTokenTexto, out int versionToken))
+                {
+                    context.Fail("El token no contiene una versión válida.");
+                    return;
+                }
+
+                // Compara la versión del JWT con la registrada en SQL Server.
+                if (versionToken != usuario.VersionToken)
+                {
+                    context.Fail(
+                        "El token fue invalidado. Inicia sesión nuevamente.");
+                    return;
+                }
+
+                // Obtiene el rol incluido originalmente en el JWT.
+                var rolToken = context.Principal?
+                    .FindFirst(ClaimTypes.Role)?.Value;
+
+                // Rechaza el token si el rol ha cambiado o ya no es válido.
+                if (usuario.Rol == null ||
+                    string.IsNullOrWhiteSpace(usuario.Rol.Nombre) ||
+                    usuario.Rol.Nombre != rolToken)
+                {
+                    context.Fail("El rol del usuario ha cambiado. Inicia sesión nuevamente.");
+                    return;
+                }
+            }
         };
     });
 

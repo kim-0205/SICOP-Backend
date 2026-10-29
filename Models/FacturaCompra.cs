@@ -37,12 +37,26 @@ namespace SICOP.Models
         [StringLength(500)]
         public string? Observaciones { get; set; }
 
+
+        // Indica si la factura fue anulada.
+        public bool Anulada { get; set; } = false;
+
+        // Fecha en que se anuló la factura.
+        public DateTime? FechaAnulacion { get; set; }
+
+        // Motivo por el cual se anuló la factura.
+        [StringLength(500)]
+        public string? MotivoAnulacion { get; set; }
+
+        // Identificador del administrador que anuló la factura.
+        public int? AnuladaPorUsuarioId { get; set; }
+
+
         // Relación: cada factura pertenece a un proveedor.
         [ForeignKey(nameof(ProveedorId))]
         public Proveedor? Proveedor { get; set; }
 
         // Relación: una factura puede tener varios pagos.
-        public ICollection<Pago> Pagos { get; set; }
-            = new List<Pago>();
+        public ICollection<Pago> Pagos { get; set; } = new List<Pago>();
     }
 }

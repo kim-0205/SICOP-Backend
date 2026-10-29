@@ -33,6 +33,9 @@ namespace SICOP.Models
         // Indica si el usuario puede acceder al sistema.
         public bool Activo { get; set; } = true;
 
+        // Controla la vigencia de los tokens JWT del usuario.
+        public int VersionToken { get; set; } = 1;
+
         // Relación: cada usuario pertenece a un rol.
         [ForeignKey(nameof(RolId))]
         public Rol Rol { get; set; } = null!;

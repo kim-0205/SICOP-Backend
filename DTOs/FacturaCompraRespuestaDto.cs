@@ -25,5 +25,17 @@ namespace SICOP.DTOs
 
         // Información adicional.
         public string? Observaciones { get; set; }
+
+        // Indica si la factura fue anulada.
+        public bool Anulada { get; set; }
+
+        // Fecha en que se anuló la factura.
+        public DateTime? FechaAnulacion { get; set; }
+
+        // Motivo por el que se anuló.
+        public string? MotivoAnulacion { get; set; }
+
+        // Identificador del administrador que la anuló.
+        public int? AnuladaPorUsuarioId { get; set; }
     }
 }

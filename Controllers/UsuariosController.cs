@@ -1,15 +1,22 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SICOP.Models;
 using SICOP.Contexts;
 using SICOP.DTOs;
-using Microsoft.AspNetCore.Identity;
+using SICOP.Models;
+using System.Security.Claims;
 
+// Define la ruta del controlador.
 [Route("api/[controller]")]
 [ApiController]
+
+// Permite el acceso únicamente al Administrador General.
+[Authorize(Roles = "Administrador General")]
 public class UsuariosController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+
     public UsuariosController(ApplicationDbContext context)
     {
         _context = context;
@@ -24,19 +31,10 @@ public class UsuariosController : ControllerBase
         var usuarios = await _context.Usuarios
             .Select(usuario => new UsuarioRespuestaDto
             {
-                // Identificador del usuario.
                 UsuarioId = usuario.UsuarioId,
-
-                // Nombre completo.
                 Nombre = usuario.Nombre,
-
-                // Correo electrónico.
                 Correo = usuario.Correo,
-
-                // Rol asignado.
                 RolId = usuario.RolId,
-
-                // Estado del usuario.
                 Activo = usuario.Activo
             })
             .ToListAsync();
@@ -107,10 +105,47 @@ public class UsuariosController : ControllerBase
             return BadRequest("El rol seleccionado no existe.");
         }
 
+        // Verifica si el usuario es Administrador General.
+        bool esAdministrador = await _context.Roles
+            .AnyAsync(r => r.RolId == usuario.RolId &&
+                           r.Nombre == "Administrador General");
+
+        // Verifica si el nuevo rol también es Administrador General.
+        bool nuevoRolEsAdministrador = await _context.Roles
+            .AnyAsync(r => r.RolId == dto.RolId &&
+                           r.Nombre == "Administrador General");
+
+        // Evita que el último administrador activo pierda su rol.
+        if (usuario.Activo &&
+            esAdministrador &&
+            !nuevoRolEsAdministrador)
+        {
+            int administradoresActivos = await _context.Usuarios
+                .CountAsync(u => u.Activo &&
+                    u.Rol.Nombre == "Administrador General");
+
+            if (administradoresActivos <= 1)
+            {
+                return BadRequest(
+                    "No puedes cambiar el rol del último Administrador General activo.");
+            }
+        }
+
+
+        // Comprueba si el administrador está cambiando el rol.
+        bool cambioRol = usuario.RolId != dto.RolId;
+
         // Actualiza únicamente los campos permitidos.
         usuario.Nombre = dto.Nombre;
         usuario.Correo = dto.Correo;
         usuario.RolId = dto.RolId;
+
+        // Si cambia el rol, invalida los tokens anteriores.
+        if (cambioRol)
+        {
+            usuario.VersionToken++;
+        }
+
 
         // Conserva PasswordHash y Activo sin modificaciones.
 
@@ -201,7 +236,7 @@ public class UsuariosController : ControllerBase
     }
 
     // DELETE: api/Usuarios/1
-    // Impide eliminar usuarios para conservar el historial del sistema.
+    // Impide eliminar usuarios para conservar el historial.
     [HttpDelete("{usuarioid:int}")]
     public IActionResult DeleteUsuario(int usuarioid)
     {
@@ -210,11 +245,6 @@ public class UsuariosController : ControllerBase
         return BadRequest(
             "Los usuarios no pueden eliminarse directamente. " +
             "Debe utilizarse el procedimiento de desactivación.");
-    }
-
-    private bool UsuarioExists(int? usuarioid)
-    {
-        return _context.Usuarios.Any(e => e.UsuarioId == usuarioid);
     }
 
     // PATCH: api/Usuarios/1/desactivar
@@ -237,10 +267,45 @@ public class UsuariosController : ControllerBase
             return BadRequest("El usuario ya está desactivado.");
         }
 
-        // Cambia su estado a inactivo.
+        // Obtiene el ID del administrador autenticado mediante JWT.
+        var usuarioActualId = User.FindFirst(
+            ClaimTypes.NameIdentifier)?.Value;
+
+        // Impide que el administrador desactive su propia cuenta.
+        if (usuario.UsuarioId.ToString() == usuarioActualId)
+        {
+            return BadRequest(
+                "No puedes desactivar tu propia cuenta.");
+        }
+
+        // Comprueba si el usuario tiene el rol Administrador General.
+        bool esAdministrador = await _context.Roles
+            .AnyAsync(r => r.RolId == usuario.RolId &&
+                           r.Nombre == "Administrador General");
+
+        if (esAdministrador)
+        {
+            // Cuenta los administradores que permanecen activos.
+            int administradoresActivos = await _context.Usuarios
+                .CountAsync(u => u.Activo &&
+                    u.Rol.Nombre == "Administrador General");
+
+            // Evita desactivar al último administrador activo.
+            if (administradoresActivos <= 1)
+            {
+                return BadRequest(
+                    "No puedes desactivar al último Administrador General activo.");
+            }
+        }
+
+        // Desactiva al usuario.
         usuario.Activo = false;
 
-        // Guarda el cambio en SQL Server.
+        // Incrementa la versión de seguridad.
+        // Invalida permanentemente los JWT emitidos anteriormente.
+        usuario.VersionToken++;
+
+        // Guarda ambos cambios en SQL Server.
         await _context.SaveChangesAsync();
 
         // Confirma la desactivación.

@@ -38,7 +38,9 @@ namespace SICOP.Controllers
     [FromBody] LoginDto dto)
         {
             // Busca al usuario mediante su correo electrónico.
+            // Busca al usuario y carga su rol desde SQL Server.
             var usuario = await _context.Usuarios
+                .Include(u => u.Rol)
                 .FirstOrDefaultAsync(u => u.Correo == dto.Correo);
 
             // Verifica que el usuario exista.
@@ -78,6 +80,16 @@ namespace SICOP.Controllers
                 });
             }
 
+            // Verifica que el usuario tenga un rol válido.
+            if (usuario.Rol == null ||
+                string.IsNullOrWhiteSpace(usuario.Rol.Nombre))
+            {
+                return Unauthorized(new
+                {
+                    mensaje = "El usuario no tiene un rol válido asignado."
+                });
+            }
+
             // Obtiene la configuración necesaria para generar el JWT.
             var jwtKey = _configuration["Jwt:Key"]
                 ?? throw new InvalidOperationException("Falta la clave JWT.");
@@ -92,14 +104,25 @@ namespace SICOP.Controllers
             // Establece la fecha de vencimiento en UTC.
             var expiracion = DateTime.UtcNow.AddMinutes(minutosExpiracion);
 
-            // Define los datos que estarán dentro del token.
+            // Define los datos que estarán dentro del token JWT.
             var claims = new List<Claim>
-    {
-        new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioId.ToString()),
-        new Claim(ClaimTypes.Name, usuario.Nombre),
-        new Claim(ClaimTypes.Email, usuario.Correo),
-        new Claim(ClaimTypes.Role, usuario.RolId.ToString())
-    };
+{
+    // Identificador del usuario.
+    new Claim(ClaimTypes.NameIdentifier, usuario.UsuarioId.ToString()),
+
+    // Nombre del usuario.
+    new Claim(ClaimTypes.Name, usuario.Nombre),
+
+    // Correo electrónico.
+    new Claim(ClaimTypes.Email, usuario.Correo),
+
+    // Rol actual del usuario.
+    new Claim(ClaimTypes.Role, usuario.Rol.Nombre),
+
+    // Versión de seguridad del usuario.
+    // Permite invalidar los tokens antiguos cuando cambie la versión.
+    new Claim("VersionToken", usuario.VersionToken.ToString())
+};
 
             // Convierte la clave secreta en bytes.
             var clave = new SymmetricSecurityKey(

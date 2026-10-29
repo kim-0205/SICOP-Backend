@@ -61,6 +61,14 @@ namespace SICOP.Services
                     "La factura no existe.");
             }
 
+
+            // Si la factura está anulada, devuelve su estado.
+            if (factura.Anulada)
+            {
+                return "Anulada";
+            }
+
+
             // Calcula el total pagado.
             decimal totalPagado = await ObtenerTotalPagado(facturaId);
 

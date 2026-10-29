@@ -30,11 +30,24 @@ namespace SICOP.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("FacturaCompraId"));
 
+                    b.Property<bool>("Anulada")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("AnuladaPorUsuarioId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FechaAnulacion")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime>("FechaEmision")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("FechaVencimiento")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("NumeroFactura")
                         .IsRequired()
@@ -236,6 +249,9 @@ namespace SICOP.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("RolId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionToken")
                         .HasColumnType("int");
 
                     b.HasKey("UsuarioId");
