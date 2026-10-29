@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
 using SICOP.Contexts;
-using SICOP.DTOs;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -14,159 +13,87 @@ public class RolesController : ControllerBase
         _context = context;
     }
 
-    // GET: api/Roles
-    // Consulta todos los roles utilizando DTOs de respuesta.
+    // GET: api/Rol
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<RolRespuestaDto>>> GetRol()
+    public async Task<ActionResult<IEnumerable<Rol>>> GetRol()
     {
-        // Consulta los roles y convierte cada registro en un DTO.
-        var roles = await _context.Roles
-            .Select(rol => new RolRespuestaDto
-            {
-                RolId = rol.RolId,
-                Nombre = rol.Nombre,
-                Descripcion = rol.Descripcion
-            })
-            .ToListAsync();
-
-        // Devuelve únicamente los datos definidos en el DTO.
-        return Ok(roles);
+        return await _context.Roles.ToListAsync();
     }
 
-    // GET: api/Roles/3
-    // Consulta un rol por su ID utilizando un DTO de respuesta.
-    [HttpGet("{rolid:int}")]
-    public async Task<ActionResult<RolRespuestaDto>> GetRol(int rolid)
+    // GET: api/Rol/5
+    [HttpGet("{rolid}")]
+    public async Task<ActionResult<Rol>> GetRol(int rolid)
     {
-        // Busca el rol en SQL Server.
         var rol = await _context.Roles.FindAsync(rolid);
 
-        // Verifica que el rol exista.
         if (rol == null)
         {
-            return NotFound("El rol no existe.");
+            return NotFound();
         }
 
-        // Convierte la entidad en un DTO de respuesta.
-        var respuesta = new RolRespuestaDto
-        {
-            RolId = rol.RolId,
-            Nombre = rol.Nombre,
-            Descripcion = rol.Descripcion
-        };
-
-        // Devuelve únicamente los datos del DTO.
-        return Ok(respuesta);
+        return rol;
     }
-    // PUT: api/Roles/1
-    // Actualiza los datos de un rol utilizando un DTO.
-    [HttpPut("{rolid:int}")]
-    public async Task<IActionResult> PutRol(
-        int rolid, CrearRolDto dto)
+
+    // PUT: api/Rol/5
+    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+    [HttpPut("{rolid}")]
+    public async Task<IActionResult> PutRol(int? rolid, Rol rol)
     {
-        // Busca el rol en SQL Server.
-        var rol = await _context.Roles.FindAsync(rolid);
-
-        // Verifica que el rol exista.
-        if (rol == null)
+        if (rolid != rol.RolId)
         {
-            return NotFound("El rol no existe.");
+            return BadRequest();
         }
 
-        // Verifica que otro rol no tenga el mismo nombre.
-        bool nombreDuplicado = await _context.Roles
-            .AnyAsync(r => r.Nombre == dto.Nombre &&
-                           r.RolId != rolid);
+        _context.Entry(rol).State = EntityState.Modified;
 
-        if (nombreDuplicado)
-        {
-            return Conflict("Ya existe otro rol con ese nombre.");
-        }
-
-        // Actualiza únicamente los campos permitidos.
-        rol.Nombre = dto.Nombre;
-        rol.Descripcion = dto.Descripcion;
-
-        // Guarda los cambios en SQL Server.
         try
         {
             await _context.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (
-            ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx &&
-            (sqlEx.Number == 2601 || sqlEx.Number == 2627))
+        catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Ya existe otro rol con ese nombre.");
+            if (!RolExists(rolid))
+            {
+                return NotFound();
+            }
+            else
+            {
+                throw;
+            }
         }
 
-        // Confirma que la actualización fue exitosa.
         return NoContent();
     }
 
-
-
-
-    // POST: api/Roles
-    // Registra un nuevo rol utilizando un DTO de entrada.
+    // POST: api/Rol
+    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
     [HttpPost]
-    public async Task<ActionResult<RolRespuestaDto>> PostRol(
-        CrearRolDto dto)
+    public async Task<ActionResult<Rol>> PostRol(Rol rol)
     {
-        // Verifica que no exista un rol con el mismo nombre.
-        bool rolDuplicado = await _context.Roles
-            .AnyAsync(r => r.Nombre == dto.Nombre);
-
-        if (rolDuplicado)
-        {
-            return Conflict("Ya existe un rol con ese nombre.");
-        }
-
-        // Convierte el DTO en una entidad Rol.
-        var rol = new Rol
-        {
-            Nombre = dto.Nombre,
-            Descripcion = dto.Descripcion
-        };
-
-        // Agrega el rol a SQL Server.
         _context.Roles.Add(rol);
+        await _context.SaveChangesAsync();
 
-        try
-        {
-            // Guarda el nuevo rol.
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (
-            ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx &&
-            (sqlEx.Number == 2601 || sqlEx.Number == 2627))
-        {
-            // El índice único impide registrar nombres duplicados.
-            return Conflict("Ya existe un rol con ese nombre.");
-        }
-
-        // Convierte la entidad guardada en un DTO de respuesta.
-        var respuesta = new RolRespuestaDto
-        {
-            RolId = rol.RolId,
-            Nombre = rol.Nombre,
-            Descripcion = rol.Descripcion
-        };
-
-        // Devuelve el rol registrado.
-        return CreatedAtAction(
-            nameof(GetRol),
-            new { rolid = rol.RolId },
-            respuesta);
+        return CreatedAtAction("GetRol", new { rolid = rol.RolId }, rol);
     }
 
-    // DELETE: api/Roles/1
-    // Impide eliminar roles para proteger las relaciones con usuarios.
-    [HttpDelete("{rolid:int}")]
-    public IActionResult DeleteRol(int rolid)
+    // DELETE: api/Rol/5
+    [HttpDelete("{rolid}")]
+    public async Task<IActionResult> DeleteRol(int? rolid)
     {
-        // Los roles registrados no pueden eliminarse directamente.
-        return BadRequest(
-            "Los roles no pueden eliminarse directamente " +
-            "porque forman parte de la seguridad del sistema.");
+        var rol = await _context.Roles.FindAsync(rolid);
+        if (rol == null)
+        {
+            return NotFound();
+        }
+
+        _context.Roles.Remove(rol);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private bool RolExists(int? rolid)
+    {
+        return _context.Roles.Any(e => e.RolId == rolid);
     }
 }

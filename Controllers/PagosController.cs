@@ -4,7 +4,6 @@ using SICOP.Models;
 using SICOP.Contexts;
 using SICOP.Services;
 using SICOP.DTOs;
-using System.Data;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -25,63 +24,25 @@ public class PagosController : ControllerBase
         _facturaService = facturaService;
     }
 
-    // GET: api/Pagos
-    // Consulta todos los pagos utilizando DTOs de respuesta.
+    // GET: api/Pago
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<PagoRespuestaDto>>> GetPago()
+    public async Task<ActionResult<IEnumerable<Pago>>> GetPago()
     {
-        // Consulta los pagos y convierte cada registro en un DTO.
-        var pagos = await _context.Pagos
-            .Select(pago => new PagoRespuestaDto
-            {
-                PagoId = pago.PagoId,
-                FacturaCompraId = pago.FacturaCompraId,
-                FechaPago = pago.FechaPago,
-                Monto = pago.Monto,
-                MetodoPago = pago.MetodoPago,
-                Referencia = pago.Referencia,
-                Observaciones = pago.Observaciones,
-                Anulado = pago.Anulado,
-                FechaAnulacion = pago.FechaAnulacion,
-                MotivoAnulacion = pago.MotivoAnulacion
-            })
-            .ToListAsync();
-
-        // Devuelve únicamente los datos definidos en el DTO.
-        return Ok(pagos);
+        return await _context.Pagos.ToListAsync();
     }
 
-    // GET: api/Pagos/1
-    // Consulta un pago por su ID utilizando un DTO de respuesta.
-    [HttpGet("{pagoid:int}")]
-    public async Task<ActionResult<PagoRespuestaDto>> GetPago(int pagoid)
+    // GET: api/Pago/5
+    [HttpGet("{pagoid}")]
+    public async Task<ActionResult<Pago>> GetPago(int pagoid)
     {
-        // Busca el pago en SQL Server.
         var pago = await _context.Pagos.FindAsync(pagoid);
 
-        // Verifica que exista.
         if (pago == null)
         {
-            return NotFound("El pago no existe.");
+            return NotFound();
         }
 
-        // Convierte la entidad en un DTO de respuesta.
-        var respuesta = new PagoRespuestaDto
-        {
-            PagoId = pago.PagoId,
-            FacturaCompraId = pago.FacturaCompraId,
-            FechaPago = pago.FechaPago,
-            Monto = pago.Monto,
-            MetodoPago = pago.MetodoPago,
-            Referencia = pago.Referencia,
-            Observaciones = pago.Observaciones,
-            Anulado = pago.Anulado,
-            FechaAnulacion = pago.FechaAnulacion,
-            MotivoAnulacion = pago.MotivoAnulacion
-        };
-
-        // Devuelve únicamente los datos del DTO.
-        return Ok(respuesta);
+        return pago;
     }
 
 
@@ -102,23 +63,11 @@ public class PagosController : ControllerBase
     // POST: api/Pagos
     // Registra un pago parcial o completo utilizando un DTO.
     [HttpPost]
-    public async Task<ActionResult<PagoRespuestaDto>> PostPago(CrearPagoDto dto)
+    public async Task<ActionResult<Pago>> PostPago(CrearPagoDto dto)
     {
-        // Inicia una transacción para proteger el registro del pago.
-        await using var transaccion = await _context.Database
-            .BeginTransactionAsync(IsolationLevel.Serializable);
-
-
-        // Consulta y bloquea la factura durante la transacción.
-        // UPDLOCK impide que otro pago tome el mismo bloqueo.
-        // HOLDLOCK mantiene el bloqueo hasta finalizar la transacción.
+        // Verifica que la factura exista.
         var factura = await _context.FacturasCompra
-            .FromSqlInterpolated($@"
-                SELECT *
-                FROM FacturasCompra WITH (UPDLOCK, HOLDLOCK)
-                WHERE FacturaCompraId = {dto.FacturaCompraId}")
-            .FirstOrDefaultAsync();
-
+            .FindAsync(dto.FacturaCompraId);
 
         if (factura == null)
         {
@@ -171,32 +120,11 @@ public class PagosController : ControllerBase
         _context.Pagos.Add(pago);
         await _context.SaveChangesAsync();
 
-        // Confirma la transacción después de guardar el pago.
-        // Libera los bloqueos y hace permanentes los cambios.
-        await transaccion.CommitAsync();
-
-
-        // Convierte la entidad en un DTO de respuesta.
-        var respuesta = new PagoRespuestaDto
-        {
-            PagoId = pago.PagoId,
-            FacturaCompraId = pago.FacturaCompraId,
-            FechaPago = pago.FechaPago,
-            Monto = pago.Monto,
-            MetodoPago = pago.MetodoPago,
-            Referencia = pago.Referencia,
-            Observaciones = pago.Observaciones,
-            Anulado = pago.Anulado,
-            FechaAnulacion = pago.FechaAnulacion,
-            MotivoAnulacion = pago.MotivoAnulacion
-        };
-
-        // Devuelve el pago sin incluir relaciones circulares.
+        // Devuelve el pago registrado.
         return CreatedAtAction(
             nameof(GetPago),
             new { pagoid = pago.PagoId },
-            respuesta);
-
+            pago);
     }
 
     // PUT: api/Pagos/1/anular

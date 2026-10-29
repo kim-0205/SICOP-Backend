@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
 using SICOP.Contexts;
 using SICOP.Services;
-using SICOP.DTOs;
 
 [Route("api/[controller]")]
 [ApiController]
@@ -24,171 +23,88 @@ public class FacturasComprasController : ControllerBase
         _facturaService = facturaService;
     }
 
-    // GET: api/FacturasCompras
-    // Consulta todas las facturas utilizando DTOs de respuesta.
+    // GET: api/FacturaCompra
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<FacturaCompraRespuestaDto>>> GetFacturaCompra()
+    public async Task<ActionResult<IEnumerable<FacturaCompra>>> GetFacturaCompra()
     {
-        // Consulta las facturas y convierte cada registro en un DTO.
-        var facturas = await _context.FacturasCompra
-            .Select(factura => new FacturaCompraRespuestaDto
-            {
-                FacturaCompraId = factura.FacturaCompraId,
-                ProveedorId = factura.ProveedorId,
-                NumeroFactura = factura.NumeroFactura,
-                FechaEmision = factura.FechaEmision,
-                FechaVencimiento = factura.FechaVencimiento,
-                Total = factura.Total,
-                Observaciones = factura.Observaciones
-            })
-            .ToListAsync();
-
-        // Devuelve la lista sin incluir relaciones de navegación.
-        return Ok(facturas);
+        return await _context.FacturasCompra.ToListAsync();
     }
 
-    // GET: api/FacturasCompras/3
-    // Consulta una factura utilizando un DTO de respuesta.
+    // GET: api/FacturaCompra/5
     [HttpGet("{facturacompraid}")]
-    public async Task<ActionResult<FacturaCompraRespuestaDto>> GetFacturaCompra(
-        int facturacompraid)
+    public async Task<ActionResult<FacturaCompra>> GetFacturaCompra(int facturacompraid)
     {
-        // Busca la factura en SQL Server.
-        var factura = await _context.FacturasCompra
-            .FindAsync(facturacompraid);
+        var facturacompra = await _context.FacturasCompra.FindAsync(facturacompraid);
 
-        // Verifica que exista.
-        if (factura == null)
+        if (facturacompra == null)
         {
-            return NotFound("La factura no existe.");
+            return NotFound();
         }
 
-        // Convierte la entidad en un DTO de respuesta.
-        var respuesta = new FacturaCompraRespuestaDto
-        {
-            FacturaCompraId = factura.FacturaCompraId,
-            ProveedorId = factura.ProveedorId,
-            NumeroFactura = factura.NumeroFactura,
-            FechaEmision = factura.FechaEmision,
-            FechaVencimiento = factura.FechaVencimiento,
-            Total = factura.Total,
-            Observaciones = factura.Observaciones
-        };
-
-        // Devuelve únicamente los datos necesarios.
-        return Ok(respuesta);
+        return facturacompra;
     }
 
-    // PUT: api/FacturasCompras/1
-    // Impide modificar facturas registradas para proteger
-    // los montos y el historial financiero.
-    [HttpPut("{facturacompraid:int}")]
-    public IActionResult PutFacturaCompra(int facturacompraid)
+    // PUT: api/FacturaCompra/5
+    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+    [HttpPut("{facturacompraid}")]
+    public async Task<IActionResult> PutFacturaCompra(int? facturacompraid, FacturaCompra facturacompra)
     {
-        // No se permite modificar directamente una factura,
-        // porque podría alterar los saldos y pagos registrados.
-        return BadRequest(
-            "Las facturas registradas no pueden modificarse directamente. " +
-            "Debe utilizarse un procedimiento de corrección autorizado.");
-    }
-
-
-    // POST: api/FacturasCompras
-    // Registra una factura utilizando un DTO de entrada.
-    [HttpPost]
-    public async Task<ActionResult<FacturaCompraRespuestaDto>> PostFacturaCompra(
-    CrearFacturaCompraDto dto)
-    {
-        // Verifica que el proveedor exista.
-        var proveedor = await _context.Proveedores
-            .FindAsync(dto.ProveedorId);
-
-        if (proveedor == null)
+        if (facturacompraid != facturacompra.FacturaCompraId)
         {
-            return BadRequest("El proveedor no existe.");
+            return BadRequest();
         }
 
-        // Verifica que el proveedor no tenga registrada
-        // otra factura con el mismo número.
-        bool facturaDuplicada = await _context.FacturasCompra
-            .AnyAsync(f =>
-                f.ProveedorId == dto.ProveedorId &&
-                f.NumeroFactura == dto.NumeroFactura);
-
-        // Si ya existe, impide registrar la factura.
-        if (facturaDuplicada)
-        {
-            return Conflict(
-                "Ya existe una factura con ese número para el proveedor seleccionado.");
-        }
-
-        // Verifica que la fecha de vencimiento no sea
-        // anterior a la fecha de emisión.
-        if (dto.FechaVencimiento < dto.FechaEmision)
-        {
-            return BadRequest(
-                "La fecha de vencimiento no puede ser anterior a la fecha de emisión.");
-        }
-
-        // Convierte el DTO en una entidad FacturaCompra.
-        var factura = new FacturaCompra
-        {
-            ProveedorId = dto.ProveedorId,
-            NumeroFactura = dto.NumeroFactura,
-            FechaEmision = dto.FechaEmision!.Value,
-            FechaVencimiento = dto.FechaVencimiento!.Value,
-            Total = dto.Total,
-            Observaciones = dto.Observaciones
-        };
-
-        // Guarda la factura en SQL Server.
-        _context.FacturasCompra.Add(factura);
+        _context.Entry(facturacompra).State = EntityState.Modified;
 
         try
         {
-            // Intenta guardar la factura.
             await _context.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (
-            ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx &&
-            (sqlEx.Number == 2601 || sqlEx.Number == 2627))
+        catch (DbUpdateConcurrencyException)
         {
-            // SQL Server detectó un registro duplicado.
-            // El índice único protege la base de datos.
-            return Conflict(
-                "Ya existe una factura con ese número para el proveedor seleccionado.");
+            if (!FacturaCompraExists(facturacompraid))
+            {
+                return NotFound();
+            }
+            else
+            {
+                throw;
+            }
         }
 
-        // Devuelve la factura registrada.
-        // Convierte la factura guardada en un DTO de respuesta.
-        var respuesta = new FacturaCompraRespuestaDto
-        {
-            FacturaCompraId = factura.FacturaCompraId,
-            ProveedorId = factura.ProveedorId,
-            NumeroFactura = factura.NumeroFactura,
-            FechaEmision = factura.FechaEmision,
-            FechaVencimiento = factura.FechaVencimiento,
-            Total = factura.Total,
-            Observaciones = factura.Observaciones
-        };
-
-        // Devuelve únicamente los datos del DTO.
-        return CreatedAtAction(
-            nameof(GetFacturaCompra),
-            new { facturacompraid = factura.FacturaCompraId },
-            respuesta);
+        return NoContent();
     }
 
-    // DELETE: api/FacturasCompras/1
-    // Impide eliminar facturas para conservar el historial financiero.
-    [HttpDelete("{facturacompraid:int}")]
-    public IActionResult DeleteFacturaCompra(int facturacompraid)
+    // POST: api/FacturaCompra
+    // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+    [HttpPost]
+    public async Task<ActionResult<FacturaCompra>> PostFacturaCompra(FacturaCompra facturacompra)
     {
-        // Las facturas no deben eliminarse directamente,
-        // porque forman parte del historial de cuentas por pagar.
-        return BadRequest(
-            "Las facturas registradas no pueden eliminarse. " +
-            "Debe utilizarse un procedimiento de anulación autorizado.");
+        _context.FacturasCompra.Add(facturacompra);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction("GetFacturaCompra", new { facturacompraid = facturacompra.FacturaCompraId }, facturacompra);
+    }
+
+    // DELETE: api/FacturaCompra/5
+    [HttpDelete("{facturacompraid}")]
+    public async Task<IActionResult> DeleteFacturaCompra(int? facturacompraid)
+    {
+        var facturacompra = await _context.FacturasCompra.FindAsync(facturacompraid);
+        if (facturacompra == null)
+        {
+            return NotFound();
+        }
+
+        _context.FacturasCompra.Remove(facturacompra);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private bool FacturaCompraExists(int? facturacompraid)
+    {
+        return _context.FacturasCompra.Any(e => e.FacturaCompraId == facturacompraid);
     }
 
     // GET: api/FacturasCompras/1/saldo

@@ -19,6 +19,8 @@ namespace SICOP.Models
         public string? Descripcion { get; set; }
 
         // Relación: un rol puede tener varios usuarios.
-        public ICollection<Usuario> Usuarios { get; set; } = new List<Usuario>();
+        public ICollection<Usuario> Usuarios { get; set; }
+            = new List<Usuario>();
     }
 }
+
