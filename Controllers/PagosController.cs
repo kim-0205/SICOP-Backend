@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
@@ -8,6 +9,7 @@ using System.Data;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize(Roles = "Administrador General,Operador")]
 public class PagosController : ControllerBase
 {
     // Contexto para acceder a SQL Server.
@@ -125,6 +127,15 @@ public class PagosController : ControllerBase
             return NotFound("La factura no existe.");
         }
 
+
+        // Impide registrar pagos en facturas anuladas.
+        if (factura.Anulada)
+        {
+            return BadRequest(
+                "No se pueden registrar pagos en una factura anulada.");
+        }
+
+
         // Verifica que el monto sea mayor que cero.
         if (dto.Monto <= 0)
         {
@@ -199,15 +210,37 @@ public class PagosController : ControllerBase
 
     }
 
+
     // PUT: api/Pagos/1/anular
-    // Anula un pago sin eliminarlo de la base de datos.
+    // Anula un pago sin eliminarlo de SQL Server.
+    // Solo el Administrador General puede realizar esta operación.
     [HttpPut("{pagoid:int}/anular")]
+    [Authorize(Roles = "Administrador General")]
     public async Task<IActionResult> AnularPago(
         int pagoid,
         [FromBody] string motivo)
     {
-        // Busca el pago en SQL Server.
-        var pago = await _context.Pagos.FindAsync(pagoid);
+        // Verifica que se proporcione un motivo válido.
+        if (string.IsNullOrWhiteSpace(motivo) ||
+            motivo.Trim().Length > 500)
+        {
+            return BadRequest(
+                "Ingrese un motivo de anulación de máximo 500 caracteres.");
+        }
+
+        // Inicia una transacción para proteger la anulación.
+        await using var transaccion = await _context.Database
+            .BeginTransactionAsync(IsolationLevel.Serializable);
+
+        // Busca el pago y bloquea su registro en SQL Server.
+        // UPDLOCK evita que otra solicitud lo modifique simultáneamente.
+        // HOLDLOCK conserva el bloqueo hasta finalizar la transacción.
+        var pago = await _context.Pagos
+            .FromSqlInterpolated($@"
+                SELECT *
+                FROM Pagos WITH (UPDLOCK, HOLDLOCK)
+                WHERE PagoId = {pagoid}")
+            .FirstOrDefaultAsync();
 
         // Verifica que el pago exista.
         if (pago == null)
@@ -215,18 +248,10 @@ public class PagosController : ControllerBase
             return NotFound("El pago no existe.");
         }
 
-        // Impide anular un pago dos veces.
+        // Impide anular dos veces el mismo pago.
         if (pago.Anulado)
         {
             return BadRequest("El pago ya está anulado.");
-        }
-
-        // Verifica que se proporcione un motivo válido.
-        if (string.IsNullOrWhiteSpace(motivo) ||
-            motivo.Length > 500)
-        {
-            return BadRequest(
-                "Ingrese un motivo de anulación de máximo 500 caracteres.");
         }
 
         // Marca el pago como anulado.
@@ -235,13 +260,16 @@ public class PagosController : ControllerBase
         // Registra la fecha de anulación en UTC.
         pago.FechaAnulacion = DateTime.UtcNow;
 
-        // Guarda el motivo de la anulación.
-        pago.MotivoAnulacion = motivo;
+        // Guarda el motivo sin espacios innecesarios.
+        pago.MotivoAnulacion = motivo.Trim();
 
-        // Actualiza el registro sin eliminarlo.
+        // Actualiza el pago en SQL Server.
         await _context.SaveChangesAsync();
 
-        // Confirma que el pago fue anulado.
+        // Confirma la transacción y libera los bloqueos.
+        await transaccion.CommitAsync();
+
+        // Devuelve la información de la anulación.
         return Ok(new
         {
             Mensaje = "Pago anulado correctamente.",
@@ -251,4 +279,5 @@ public class PagosController : ControllerBase
             pago.MotivoAnulacion
         });
     }
+
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
@@ -7,6 +8,9 @@ using SICOP.DTOs;
 
 [Route("api/[controller]")]
 [ApiController]
+
+// Exige autenticación JWT para acceder al controlador.
+[Authorize(Roles = "Administrador General,Operador")]
 public class FacturasComprasController : ControllerBase
 {
     // Contexto para acceder a SQL Server.
@@ -39,7 +43,12 @@ public class FacturasComprasController : ControllerBase
                 FechaEmision = factura.FechaEmision,
                 FechaVencimiento = factura.FechaVencimiento,
                 Total = factura.Total,
-                Observaciones = factura.Observaciones
+                Observaciones = factura.Observaciones,
+                Anulada = factura.Anulada,
+                FechaAnulacion = factura.FechaAnulacion,
+                MotivoAnulacion = factura.MotivoAnulacion,
+                AnuladaPorUsuarioId = factura.AnuladaPorUsuarioId
+
             })
             .ToListAsync();
 
@@ -72,7 +81,12 @@ public class FacturasComprasController : ControllerBase
             FechaEmision = factura.FechaEmision,
             FechaVencimiento = factura.FechaVencimiento,
             Total = factura.Total,
-            Observaciones = factura.Observaciones
+            Observaciones = factura.Observaciones,
+            Anulada = factura.Anulada,
+            FechaAnulacion = factura.FechaAnulacion,
+            MotivoAnulacion = factura.MotivoAnulacion,
+            AnuladaPorUsuarioId = factura.AnuladaPorUsuarioId
+
         };
 
         // Devuelve únicamente los datos necesarios.
@@ -169,7 +183,13 @@ public class FacturasComprasController : ControllerBase
             FechaEmision = factura.FechaEmision,
             FechaVencimiento = factura.FechaVencimiento,
             Total = factura.Total,
-            Observaciones = factura.Observaciones
+
+            Observaciones = factura.Observaciones,
+            Anulada = factura.Anulada,
+            FechaAnulacion = factura.FechaAnulacion,
+            MotivoAnulacion = factura.MotivoAnulacion,
+            AnuladaPorUsuarioId = factura.AnuladaPorUsuarioId
+
         };
 
         // Devuelve únicamente los datos del DTO.
@@ -239,5 +259,92 @@ public class FacturasComprasController : ControllerBase
             Estado = estado
         });
     }
+
+
+    // PUT: api/FacturasCompras/1/anular
+    // Permite anular una factura sin eliminarla de SQL Server.
+    // Solo el Administrador General puede realizar esta operación.
+    [HttpPut("{id:int}/anular")]
+    [Authorize(Roles = "Administrador General")]
+    public async Task<IActionResult> AnularFactura(
+        int id,
+        [FromBody] string motivo)
+    {
+        // Inicia una transacción para proteger la operación.
+        await using var transaccion = await _context.Database
+            .BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+
+        // Bloquea la factura durante la anulación.
+        var factura = await _context.FacturasCompra
+            .FromSqlInterpolated($@"
+                SELECT *
+                FROM FacturasCompra WITH (UPDLOCK, HOLDLOCK)
+                WHERE FacturaCompraId = {id}")
+            .FirstOrDefaultAsync();
+
+        // Verifica que la factura exista.
+        if (factura == null)
+        {
+            return NotFound("La factura no existe.");
+        }
+
+        // Impide anular dos veces la misma factura.
+        if (factura.Anulada)
+        {
+            return BadRequest("La factura ya está anulada.");
+        }
+
+        // Verifica que se proporcione un motivo válido.
+        if (string.IsNullOrWhiteSpace(motivo) ||
+            motivo.Length > 500)
+        {
+            return BadRequest(
+                "Ingrese un motivo de anulación de máximo 500 caracteres.");
+        }
+
+        // Comprueba si existen pagos vigentes asociados.
+        bool tienePagosVigentes = await _context.Pagos
+            .AnyAsync(p => p.FacturaCompraId == id && !p.Anulado);
+
+        // Impide anular facturas con pagos vigentes.
+        if (tienePagosVigentes)
+        {
+            return BadRequest(
+                "No se puede anular una factura con pagos vigentes.");
+        }
+
+        // Obtiene el identificador del administrador autenticado.
+        var usuarioIdTexto = User.FindFirst(
+            System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!int.TryParse(usuarioIdTexto, out int usuarioId))
+        {
+            return Unauthorized("No se pudo identificar al administrador.");
+        }
+
+        // Registra la información de la anulación.
+        factura.Anulada = true;
+        factura.FechaAnulacion = DateTime.UtcNow;
+        factura.MotivoAnulacion = motivo.Trim();
+        factura.AnuladaPorUsuarioId = usuarioId;
+
+        // Guarda los cambios en SQL Server.
+        await _context.SaveChangesAsync();
+
+        // Confirma la transacción.
+        await transaccion.CommitAsync();
+
+        // Devuelve el resultado de la operación.
+        return Ok(new
+        {
+            Mensaje = "Factura anulada correctamente.",
+            factura.FacturaCompraId,
+            factura.Anulada,
+            factura.FechaAnulacion,
+            factura.MotivoAnulacion,
+            factura.AnuladaPorUsuarioId
+        });
+    }
+
 
 }
