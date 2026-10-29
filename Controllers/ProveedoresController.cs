@@ -1,11 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
 using SICOP.Contexts;
 using SICOP.DTOs;
-
 [Route("api/[controller]")]
 [ApiController]
+
+// Permite acceder únicamente a usuarios autenticados
+// con los roles Administrador General u Operador.
+[Authorize(Roles = "Administrador General,Operador")]
 public class ProveedoresController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -186,8 +190,8 @@ public class ProveedoresController : ControllerBase
             "Debe utilizarse un procedimiento de desactivación.");
     }
 
-    // PATCH: api/Proveedores/3/desactivar
-    // Desactiva un proveedor sin eliminarlo de SQL Server.
+    // Solo el Administrador General puede desactivar proveedores.
+    [Authorize(Roles = "Administrador General")]
     [HttpPatch("{proveedorid:int}/desactivar")]
     public async Task<IActionResult> DesactivarProveedor(int proveedorid)
     {
@@ -216,8 +220,8 @@ public class ProveedoresController : ControllerBase
         return Ok("Proveedor desactivado correctamente.");
     }
 
-    // PATCH: api/Proveedores/3/activar
-    // Reactiva un proveedor que estaba desactivado.
+    // Solo el Administrador General puede activar proveedores.
+    [Authorize(Roles = "Administrador General")]
     [HttpPatch("{proveedorid:int}/activar")]
     public async Task<IActionResult> ActivarProveedor(int proveedorid)
     {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SICOP.Models;
@@ -6,6 +7,9 @@ using SICOP.DTOs;
 
 [Route("api/[controller]")]
 [ApiController]
+
+// Permite acceder únicamente al Administrador General.
+[Authorize(Roles = "Administrador General")]
 public class ParametrosSistemasController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
