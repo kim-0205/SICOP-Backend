@@ -52,9 +52,10 @@ namespace SICOP.Contexts
                 .HasIndex(p => p.NIT)
                 .IsUnique();
 
-            // El número de factura es único por proveedor.
+            // El número de factura debe ser único en todo SICOP,
+            // independientemente del proveedor.
             modelBuilder.Entity<FacturaCompra>()
-                .HasIndex(f => new { f.ProveedorId, f.NumeroFactura })
+                .HasIndex(f => f.NumeroFactura)
                 .IsUnique();
 
             // El correo de cada usuario debe ser único.
