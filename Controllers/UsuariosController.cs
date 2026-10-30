@@ -235,6 +235,39 @@ public class UsuariosController : ControllerBase
             respuesta);
     }
 
+    // PATCH: api/Usuarios/1/cambiar-password
+    // Permite al Administrador General cambiar la contraseña de un usuario.
+    [HttpPatch("{usuarioid:int}/cambiar-password")]
+    [Authorize(Roles = "Administrador General")]
+    public async Task<IActionResult> CambiarPassword(
+        int usuarioid,
+        [FromBody] CambiarPasswordUsuarioDto dto)
+    {
+        // Busca el usuario en SQL Server.
+        var usuario = await _context.Usuarios.FindAsync(usuarioid);
+
+        // Verifica que el usuario exista.
+        if (usuario == null)
+        {
+            return NotFound("El usuario no existe.");
+        }
+
+        // Genera un hash seguro para la nueva contraseña.
+        var passwordHasher = new PasswordHasher<Usuario>();
+
+        usuario.PasswordHash = passwordHasher.HashPassword(
+            usuario, dto.NuevaPassword);
+
+        // Invalida los tokens anteriores del usuario.
+        usuario.VersionToken++;
+
+        // Guarda los cambios en SQL Server.
+        await _context.SaveChangesAsync();
+
+        // Confirma que la contraseña fue actualizada.
+        return Ok("Contraseña actualizada correctamente.");
+    }
+
     // DELETE: api/Usuarios/1
     // Impide eliminar usuarios para conservar el historial.
     [HttpDelete("{usuarioid:int}")]
