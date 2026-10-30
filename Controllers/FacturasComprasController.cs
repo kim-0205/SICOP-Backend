@@ -122,6 +122,14 @@ public class FacturasComprasController : ControllerBase
             return BadRequest("El proveedor no existe.");
         }
 
+        // Impedir registrar facturas con proveedores inactivos.
+        if (!proveedor.Activo)
+        {
+            return BadRequest(
+                "No se puede registrar una factura con un proveedor inactivo."
+            );
+        }
+
         // Verifica que el proveedor no tenga registrada
         // otra factura con el mismo número.
         bool facturaDuplicada = await _context.FacturasCompra

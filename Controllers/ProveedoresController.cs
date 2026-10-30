@@ -204,6 +204,14 @@ public class ProveedoresController : ControllerBase
             return NotFound("El proveedor no existe.");
         }
 
+        // Impide modificar proveedores que están inactivos.
+        if (!proveedor.Activo)
+        {
+            return BadRequest(
+                "No se puede editar un proveedor inactivo. " +
+                "Debe activarlo antes de modificar sus datos.");
+        }
+
         // Evita desactivar nuevamente un proveedor inactivo.
         if (!proveedor.Activo)
         {
