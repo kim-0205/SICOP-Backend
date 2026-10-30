@@ -130,18 +130,17 @@ public class FacturasComprasController : ControllerBase
             );
         }
 
-        // Verifica que el proveedor no tenga registrada
-        // otra factura con el mismo número.
+        // Verifica que no exista otra factura con el mismo número
+        // en todo el sistema, independientemente del proveedor.
         bool facturaDuplicada = await _context.FacturasCompra
-            .AnyAsync(f =>
-                f.ProveedorId == dto.ProveedorId &&
-                f.NumeroFactura == dto.NumeroFactura);
+            .AnyAsync(f => f.NumeroFactura == dto.NumeroFactura);
 
-        // Si ya existe, impide registrar la factura.
+        // Impide registrar números de factura repetidos.
         if (facturaDuplicada)
         {
             return Conflict(
-                "Ya existe una factura con ese número para el proveedor seleccionado.");
+                "Ya existe una factura registrada con ese número. " +
+                "No se permiten números de factura duplicados.");
         }
 
         // Verifica que la fecha de vencimiento no sea
@@ -178,7 +177,8 @@ public class FacturasComprasController : ControllerBase
             // SQL Server detectó un registro duplicado.
             // El índice único protege la base de datos.
             return Conflict(
-                "Ya existe una factura con ese número para el proveedor seleccionado.");
+                        "Ya existe una factura registrada con ese número. " +
+                        "No se permiten números de factura duplicados.");
         }
 
         // Devuelve la factura registrada.
