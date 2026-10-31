@@ -8,8 +8,7 @@ using SICOP.DTOs;
 [Route("api/[controller]")]
 [ApiController]
 
-// Permite acceder únicamente al Administrador General.
-[Authorize(Roles = "Administrador General")]
+[Authorize]
 public class ParametrosSistemasController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -18,8 +17,45 @@ public class ParametrosSistemasController : ControllerBase
         _context = context;
     }
 
-    // GET: api/ParametrosSistemas
-    // Consulta todos los parámetros utilizando DTOs de respuesta.
+
+    // GET: api/ParametrosSistemas/dias-alerta-vencimiento
+    // Permite consultar la configuración de alertas.
+    // Disponible para Administrador General y Operador.
+    [HttpGet("dias-alerta-vencimiento")]
+    [Authorize(Roles = "Administrador General,Operador")]
+    public async Task<IActionResult> GetDiasAlertaVencimiento()
+    {
+        // Busca la configuración en SQL Server.
+        var parametro = await _context.ParametrosSistema
+            .FirstOrDefaultAsync(p => p.Clave == "DIAS_ALERTA_VENCIMIENTO");
+
+        // Verifica que exista la configuración.
+        if (parametro == null)
+        {
+            return NotFound(new
+            {
+                mensaje = "No se encontró la configuración de días de alerta."
+            });
+        }
+
+        // Convierte el valor almacenado a número entero.
+        if (!int.TryParse(parametro.Valor, out int dias) || dias < 1)
+        {
+            return StatusCode(500, new
+            {
+                mensaje = "La configuración de días de alerta no es válida."
+            });
+        }
+
+        // Devuelve únicamente los días configurados.
+        return Ok(new
+        {
+            dias = dias
+        });
+    }
+
+
+    [Authorize(Roles = "Administrador General")]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ParametroSistemaRespuestaDto>>> GetParametroSistema()
     {
@@ -45,8 +81,7 @@ public class ParametrosSistemasController : ControllerBase
         return Ok(parametros);
     }
 
-    // GET: api/ParametrosSistemas/5
-    // Consulta un parámetro específico mediante su identificador.
+    [Authorize(Roles = "Administrador General")]
     [HttpGet("{parametrosistemaid}")]
     public async Task<ActionResult<ParametroSistemaRespuestaDto>> GetParametroSistema(int parametrosistemaid)
     {
@@ -82,8 +117,7 @@ public class ParametrosSistemasController : ControllerBase
         return Ok(parametro);
     }
 
-    // PUT: api/ParametrosSistemas/1
-    // Actualiza un parámetro existente utilizando un DTO.
+    [Authorize(Roles = "Administrador General")]
     [HttpPut("{parametrosistemaid}")]
     public async Task<IActionResult> PutParametroSistema(
         int parametrosistemaid,
@@ -140,8 +174,7 @@ public class ParametrosSistemasController : ControllerBase
         return NoContent();
     }
 
-    // POST: api/ParametrosSistemas
-    // Registra un nuevo parámetro del sistema.
+    [Authorize(Roles = "Administrador General")]
     [HttpPost]
     public async Task<ActionResult<ParametroSistemaRespuestaDto>> PostParametroSistema(
         [FromBody] CrearParametroSistemaDto dto)
@@ -210,8 +243,7 @@ public class ParametrosSistemasController : ControllerBase
         );
     }
 
-    // DELETE: api/ParametrosSistemas/1
-    // Impide eliminar directamente los parámetros del sistema.
+    [Authorize(Roles = "Administrador General")]
     [HttpDelete("{parametrosistemaid}")]
     public IActionResult DeleteParametroSistema(int parametrosistemaid)
     {
