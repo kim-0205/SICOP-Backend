@@ -6,6 +6,7 @@ using SICOP.Contexts;
 using SICOP.DTOs;
 using SICOP.Models;
 using System.Security.Claims;
+using SICOP.Services;
 
 // Define la ruta del controlador.
 [Route("api/[controller]")]
@@ -17,9 +18,15 @@ public class UsuariosController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
 
-    public UsuariosController(ApplicationDbContext context)
+    // Servicio para enviar notificaciones por correo.
+    private readonly BrevoEmailService _emailService;
+
+    public UsuariosController(
+        ApplicationDbContext context,
+        BrevoEmailService emailService)
     {
         _context = context;
+        _emailService = emailService;
     }
 
     // GET: api/Usuarios
@@ -168,8 +175,11 @@ public class UsuariosController : ControllerBase
     // POST: api/Usuarios
     // Registra un usuario con su contraseña protegida.
     [HttpPost]
+    //public async Task<ActionResult<UsuarioRespuestaDto>> PostUsuario(
+    //    CrearUsuarioDto dto)
     public async Task<ActionResult<UsuarioRespuestaDto>> PostUsuario(
-        CrearUsuarioDto dto)
+    CrearUsuarioDto dto,
+    [FromQuery] bool notificarCorreo = false)
     {
         // Verifica que el correo no esté registrado.
         bool correoDuplicado = await _context.Usuarios
@@ -218,6 +228,18 @@ public class UsuariosController : ControllerBase
             return Conflict("Ya existe un usuario con ese correo.");
         }
 
+        // Envía la notificación únicamente si el administrador la solicita.
+        // El usuario ya fue guardado correctamente en SQL Server.
+
+        if (notificarCorreo)
+        {
+            await NotificarUsuarioAsync(
+                usuario.Correo,
+                usuario.Nombre,
+                "creada",
+                dto.Password);
+        }
+
         // Prepara la respuesta sin incluir la contraseña.
         var respuesta = new UsuarioRespuestaDto
         {
@@ -239,9 +261,13 @@ public class UsuariosController : ControllerBase
     // Permite al Administrador General cambiar la contraseña de un usuario.
     [HttpPatch("{usuarioid:int}/cambiar-password")]
     [Authorize(Roles = "Administrador General")]
+    //public async Task<IActionResult> CambiarPassword(
+    //    int usuarioid,
+    //    [FromBody] CambiarPasswordUsuarioDto dto)
     public async Task<IActionResult> CambiarPassword(
-        int usuarioid,
-        [FromBody] CambiarPasswordUsuarioDto dto)
+    int usuarioid,
+    [FromBody] CambiarPasswordUsuarioDto dto,
+    [FromQuery] bool notificarCorreo = false)
     {
         // Busca el usuario en SQL Server.
         var usuario = await _context.Usuarios.FindAsync(usuarioid);
@@ -263,6 +289,16 @@ public class UsuariosController : ControllerBase
 
         // Guarda los cambios en SQL Server.
         await _context.SaveChangesAsync();
+
+        // Envía las credenciales si el administrador lo solicita.
+        if (notificarCorreo)
+        {
+            await NotificarUsuarioAsync(
+                usuario.Correo,
+                usuario.Nombre,
+                "actualizada",
+                dto.NuevaPassword);
+        }
 
         // Confirma que la contraseña fue actualizada.
         return Ok("Contraseña actualizada correctamente.");
@@ -373,5 +409,32 @@ public class UsuariosController : ControllerBase
 
         // Confirma la reactivación.
         return Ok("Usuario activado correctamente.");
+    }
+
+    private async Task<bool> NotificarUsuarioAsync(
+    string correo,
+    string nombre,
+    string accion,
+    string passwordTemporal)
+    {
+        try
+        {
+            await _emailService.EnviarCorreoAsync(
+                correo,
+                "SICOP - Credenciales de acceso",
+                $"Hola, {nombre}.\n\n" +
+                $"Tu cuenta de SICOP ha sido {accion}.\n\n" +
+                $"Usuario: {correo}\n" +
+                $"Contraseña: {passwordTemporal}\n\n" +
+                "Inicia sesión segura.\n\n" +
+                "Atentamente,\nSICOP."
+            );
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
