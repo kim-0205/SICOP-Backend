@@ -161,6 +161,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Para envio de correos
+builder.Services.AddHttpClient<SICOP.Services.BrevoEmailService>();
+
 // Registra los servicios de autorización.
 builder.Services.AddAuthorization();
 
